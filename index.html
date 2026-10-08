@@ -1,0 +1,1371 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>宇宙 · 手势粒子实验室</title>
+  
+  <!-- 离线本地依赖 Vendor 引入 -->
+  <script src="./vendor/three.min.js"></script>
+  <script src="./vendor/camera_utils.js"></script>
+  <script src="./vendor/drawing_utils.js"></script>
+  <script src="./vendor/hands.js"></script>
+
+  <style>
+    :root {
+      --bg-color: #05070c;
+      --primary-cyan: #00f2fe;
+      --primary-blue: #4facfe;
+      --panel-bg: rgba(9, 13, 24, 0.72);
+      --panel-border: rgba(0, 242, 254, 0.18);
+      --text-main: #f0f6fc;
+      --text-sub: #8b9bb4;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-color);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text-main);
+    }
+
+    /* WebGL 画布全屏 */
+    #webgl-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* 顶部导航 */
+    header {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      padding: 24px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #fff 10%, var(--primary-cyan) 80%);
+      box-shadow: 0 0 16px var(--primary-cyan);
+    }
+
+    .brand-title {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 2px;
+      background: linear-gradient(90deg, #ffffff, var(--primary-cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      background: rgba(14, 21, 37, 0.65);
+      border: 1px solid var(--panel-border);
+      backdrop-filter: blur(8px);
+      font-size: 12px;
+      color: var(--text-sub);
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #eab308;
+      box-shadow: 0 0 8px #eab308;
+      transition: all 0.3s ease;
+    }
+    .status-dot.active {
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+    }
+
+    /* 左侧形态展示信息 */
+    .hero-info {
+      position: absolute;
+      left: 36px;
+      top: 48%;
+      transform: translateY(-50%);
+      z-index: 10;
+      pointer-events: none;
+      max-width: 320px;
+    }
+
+    .shape-title-cn {
+      font-size: 52px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      line-height: 1.1;
+      text-shadow: 0 0 30px rgba(0, 242, 254, 0.4);
+      background: linear-gradient(180deg, #ffffff 30%, #a5f3fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 6px;
+      transition: all 0.5s ease;
+    }
+
+    .shape-title-en {
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--primary-cyan);
+      opacity: 0.85;
+      margin-bottom: 24px;
+    }
+
+    .quick-guide {
+      background: rgba(8, 14, 26, 0.5);
+      border-left: 2px solid var(--primary-cyan);
+      padding: 12px 16px;
+      backdrop-filter: blur(6px);
+      border-radius: 0 8px 8px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .guide-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--text-sub);
+    }
+    .guide-row b {
+      color: #fff;
+      font-weight: 500;
+    }
+
+    /* 右侧 288px 毛玻璃控制台 */
+    .control-panel {
+      position: absolute;
+      top: 24px;
+      bottom: 24px;
+      right: 24px;
+      width: 288px;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      overflow-y: auto;
+      gap: 20px;
+    }
+
+    .control-panel::-webkit-scrollbar {
+      width: 4px;
+    }
+    .control-panel::-webkit-scrollbar-thumb {
+      background: rgba(0, 242, 254, 0.2);
+      border-radius: 4px;
+    }
+
+    .panel-header {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      color: #fff;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 12px;
+    }
+
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      color: var(--text-sub);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    /* 形态选择网格 */
+    .shape-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .shape-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 10px 4px;
+      color: var(--text-sub);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      transition: all 0.2s ease;
+    }
+
+    .shape-btn svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+
+    .shape-btn:hover {
+      background: rgba(0, 242, 254, 0.1);
+      color: #fff;
+      border-color: rgba(0, 242, 254, 0.4);
+    }
+
+    .shape-btn.active {
+      background: linear-gradient(135deg, rgba(0, 242, 254, 0.2), rgba(79, 172, 254, 0.1));
+      border-color: var(--primary-cyan);
+      color: var(--primary-cyan);
+      box-shadow: 0 0 12px rgba(0, 242, 254, 0.2);
+    }
+
+    /* 图像上传提线卡片 */
+    .upload-box {
+      border: 1px dashed rgba(0, 242, 254, 0.35);
+      background: rgba(0, 242, 254, 0.03);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+    .upload-box:hover {
+      background: rgba(0, 242, 254, 0.08);
+      border-color: var(--primary-cyan);
+    }
+    .upload-box input {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .upload-text {
+      font-size: 12px;
+      color: var(--text-sub);
+    }
+    .upload-sub {
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.35);
+      margin-top: 4px;
+    }
+
+    /* 颜色色板 */
+    .color-palette {
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .color-chip {
+      flex: 1;
+      height: 28px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    .color-chip.active {
+      border-color: #fff;
+      transform: scale(1.08);
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.4);
+    }
+
+    /* 滑杆组件 */
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .slider-row {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .slider-info {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-sub);
+    }
+
+    .slider-info span:last-child {
+      color: var(--primary-cyan);
+      font-family: monospace;
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 2px;
+      outline: none;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--primary-cyan);
+      cursor: pointer;
+      box-shadow: 0 0 8px var(--primary-cyan);
+      transition: 0.15s ease;
+    }
+    input[type=range]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    /* 手势状态实时信息面板 */
+    .gesture-monitor {
+      background: rgba(0, 0, 0, 0.35);
+      border-radius: 8px;
+      padding: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 11px;
+    }
+
+    .monitor-row {
+      display: flex;
+      justify-content: space-between;
+      color: var(--text-sub);
+    }
+    .monitor-val {
+      font-family: monospace;
+      color: #fff;
+    }
+
+    /* 动作按钮 */
+    .btn-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: auto;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-primary {
+      background: linear-gradient(90deg, #00f2fe, #4facfe);
+      border: none;
+      color: #05070c;
+      font-weight: 600;
+    }
+    .btn-primary:hover {
+      box-shadow: 0 0 16px rgba(0, 242, 254, 0.4);
+      filter: brightness(1.1);
+    }
+
+    /* 左下角摄像头预览小窗 */
+    #cam-container {
+      position: absolute;
+      left: 36px;
+      bottom: 32px;
+      width: 176px;
+      height: 132px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--panel-border);
+      background: rgba(5, 7, 12, 0.85);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(10px);
+      z-index: 15;
+    }
+
+    #webcam-video {
+      display: none;
+    }
+
+    #cam-canvas {
+      width: 100%;
+      height: 100%;
+      transform: scaleX(-1); /* 镜像翻转 */
+      display: block;
+    }
+
+    .cam-label {
+      position: absolute;
+      top: 6px;
+      left: 8px;
+      font-size: 9px;
+      letter-spacing: 0.5px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.6);
+      color: var(--primary-cyan);
+      pointer-events: none;
+    }
+
+    /* Toast 提示 */
+    #toast {
+      position: absolute;
+      bottom: 36px;
+      left: 50%;
+      transform: translateX(-50%) translateY(30px);
+      opacity: 0;
+      background: rgba(9, 13, 24, 0.9);
+      border: 1px solid var(--primary-cyan);
+      box-shadow: 0 0 20px rgba(0, 242, 254, 0.25);
+      padding: 10px 24px;
+      border-radius: 24px;
+      font-size: 13px;
+      letter-spacing: 1px;
+      color: #fff;
+      z-index: 99;
+      pointer-events: none;
+      transition: all 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+    }
+    #toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    /* WebGL 降级提示 */
+    #webgl-fallback {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #05070c;
+      color: #fff;
+      z-index: 999;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 24px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- WebGL 画布容器 -->
+  <div id="webgl-canvas"></div>
+
+  <!-- 降级提示屏 -->
+  <div id="webgl-fallback">
+    <h2 style="font-size: 24px; margin-bottom: 12px; color: var(--primary-cyan);">图形加速不可用</h2>
+    <p style="color: var(--text-sub); max-width: 420px; line-height: 1.6;">
+      当前浏览器未能正常初始化 WebGL 上下文，请确认硬件加速与 WebGL 开关已启用。
+    </p>
+  </div>
+
+  <!-- 顶部状态栏 -->
+  <header>
+    <div class="brand">
+      <div class="brand-logo"></div>
+      <div class="brand-title">星序 · 手势粒子实验室</div>
+    </div>
+    <div class="status-badge">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-text">待机 · 自动律动模式</span>
+    </div>
+  </header>
+
+  <!-- 左侧居中当前形态与手势提示 -->
+  <div class="hero-info">
+    <div class="shape-title-cn" id="display-title-cn">星云</div>
+    <div class="shape-title-en" id="display-title-en">SPIRAL GALAXY</div>
+
+    <div class="quick-guide">
+      <div class="guide-row"><span>🖐 <b>张开手掌</b></span><span>粒子星海扩散膨胀</span></div>
+      <div class="guide-row"><span>🤏 <b>指间捏合</b></span><span>星辰高密向心塌缩</span></div>
+      <div class="guide-row"><span>✋ <b>左右平移</b></span><span>主导时空角动量旋转</span></div>
+    </div>
+  </div>
+
+  <!-- 左下角手势检测小窗 -->
+  <div id="cam-container">
+    <video id="webcam-video" playsinline></video>
+    <canvas id="cam-canvas" width="176" height="132"></canvas>
+    <div class="cam-label">HANDS TRACKER</div>
+  </div>
+
+  <!-- 右侧毛玻璃控制台 (288px) -->
+  <div class="control-panel">
+    <div class="panel-header">
+      <span>创作控制台</span>
+      <span style="font-size: 11px; color: var(--text-sub);">16,000 PTS</span>
+    </div>
+
+    <!-- 形态选择 -->
+    <div>
+      <div class="section-title">形态切换</div>
+      <div class="shape-grid">
+        <button class="shape-btn active" data-shape="galaxy">
+          <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 17.93V17a1 1 0 0 0-2 0v2.93A8 8 0 0 1 4.07 13H7a1 1 0 0 0 0-2H4.07A8 8 0 0 1 11 4.07V7a1 1 0 0 0 2 0V4.07A8 8 0 0 1 19.93 11H17a1 1 0 0 0 0 2h2.93A8 8 0 0 1 13 19.93z"/></svg>
+          <span>星云</span>
+        </button>
+        <button class="shape-btn" data-shape="firework">
+          <svg viewBox="0 0 24 24"><path d="M12 2v4m0 12v4M2 12h4m12 0h4m-3.17-6.83l-2.83 2.83m-8 8l-2.83 2.83m0-13.66l2.83 2.83m8 8l2.83 2.83M12 8a4 4 0 1 0 4 4 4 4 0 0 0-4-4z"/></svg>
+          <span>烟花</span>
+        </button>
+        <button class="shape-btn" data-shape="saturn">
+          <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0-9 9 9 9 0 0 0 9 9 9 9 0 0 0 9-9 9 9 0 0 0-9-9zm0 16a7 7 0 1 1 7-7 7 7 0 0 1-7 7zm9.71-8.29a1 1 0 0 0-1.42 0A10.93 10.93 0 0 1 12 14.5a10.93 10.93 0 0 1-8.29-3.79 1 1 0 0 0-1.42 1.42A12.91 12.91 0 0 0 12 16.5a12.91 12.91 0 0 0 9.71-4.37 1 1 0 0 0 0-1.42z"/></svg>
+          <span>土星</span>
+        </button>
+        <button class="shape-btn" data-shape="heart">
+          <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+          <span>爱心</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 图片提取轮廓线条 -->
+    <div>
+      <div class="section-title">图片提线成星</div>
+      <div class="upload-box">
+        <input type="file" id="img-uploader" accept="image/*">
+        <div class="upload-text">＋ 选择图像生成三维星谱</div>
+        <div class="upload-sub">Sobel 算子自适应边缘检测 (170px)</div>
+      </div>
+    </div>
+
+    <!-- 基础色板选择 -->
+    <div>
+      <div class="section-title">星谱主色</div>
+      <div class="color-palette">
+        <div class="color-chip active" data-color="#00f2fe" style="background: linear-gradient(135deg, #00f2fe, #4facfe);" title="青蓝"></div>
+        <div class="color-chip" data-color="#ff007f" style="background: linear-gradient(135deg, #ff0844, #ffb199);" title="星霓"></div>
+        <div class="color-chip" data-color="#8a2be2" style="background: linear-gradient(135deg, #b224ef, #7579ff);" title="极光紫"></div>
+        <div class="color-chip" data-color="#00ff87" style="background: linear-gradient(135deg, #00ff87, #60efff);" title="翠光"></div>
+        <div class="color-chip" data-color="#ffaa00" style="background: linear-gradient(135deg, #f7971e, #ffd200);" title="琥珀金"></div>
+      </div>
+    </div>
+
+    <!-- 参数滑杆 -->
+    <div class="control-group">
+      <div class="slider-row">
+        <div class="slider-info"><span>粒子密度 (活跃度)</span><span id="val-density">100%</span></div>
+        <input type="range" id="sl-density" min="2000" max="16000" step="500" value="16000">
+      </div>
+      <div class="slider-row">
+        <div class="slider-info"><span>粒子尺寸 (辉光感)</span><span id="val-glow">2.4</span></div>
+        <input type="range" id="sl-glow" min="1.0" max="5.0" step="0.1" value="2.4">
+      </div>
+      <div class="slider-row">
+        <div class="slider-info"><span>基础旋转速度</span><span id="val-speed">1.0x</span></div>
+        <input type="range" id="sl-speed" min="0" max="3" step="0.1" value="1.0">
+      </div>
+      <div class="slider-row">
+        <div class="slider-info"><span>背景深空星尘</span><span id="val-dust">800</span></div>
+        <input type="range" id="sl-dust" min="0" max="2500" step="100" value="800">
+      </div>
+    </div>
+
+    <!-- 实时手势监视器 -->
+    <div>
+      <div class="section-title">手势反馈指标</div>
+      <div class="gesture-monitor">
+        <div class="monitor-row"><span>手掌状态</span><span class="monitor-val" id="gest-state">待机律动中</span></div>
+        <div class="monitor-row"><span>缩放因子</span><span class="monitor-val" id="gest-scale">1.00x</span></div>
+        <div class="monitor-row"><span>角速度偏置</span><span class="monitor-val" id="gest-rot">+0.000</span></div>
+      </div>
+    </div>
+
+    <!-- 功能按钮 -->
+    <div class="btn-actions">
+      <button class="btn btn-primary" id="btn-toggle-cam">
+        <svg style="width:14px;height:14px;fill:currentColor" viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+        <span id="btn-cam-text">开启摄像头感知</span>
+      </button>
+      <div style="display:flex; gap:8px;">
+        <button class="btn" id="btn-demo-mode" style="flex:1;">自动演示: 开</button>
+        <button class="btn" id="btn-reset" style="flex:1;">复位姿态</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 底部 Toast -->
+  <div id="toast">形态已切换为：星云</div>
+
+  <!-- 核心逻辑 -->
+  <script>
+    /* ==========================================================================
+       一、全局参数与状态管理
+       ========================================================================== */
+    const TOTAL_PARTICLES = 16000;
+    let scene, camera, renderer;
+    let particleSystem, particleGeo;
+    let bgDustSystem, bgDustGeo;
+
+    // 粒子坐标缓存
+    const currentPositions = new Float32Array(TOTAL_PARTICLES * 3);
+    const targetPositions = new Float32Array(TOTAL_PARTICLES * 3);
+    const particleColors = new Float32Array(TOTAL_PARTICLES * 3);
+    const noisePhases = new Float32Array(TOTAL_PARTICLES * 3);
+
+    // 颜色系统
+    let baseColor = new THREE.Color("#00f2fe");
+    const whiteColor = new THREE.Color(1, 1, 1);
+
+    // 交互调节参数
+    const PARAMS = {
+      activeParticles: 16000,
+      glowSize: 2.4,
+      baseSpeed: 1.0,
+      bgDustCount: 800,
+      currentShape: 'galaxy',
+      autoDemo: true,
+      cameraActive: false
+    };
+
+    // 手势状态
+    const GESTURE = {
+      isTracking: false,
+      scale: 1.0,
+      targetScale: 1.0,
+      rotVelocity: 0.0,
+      targetRotVelocity: 0.0,
+      rawOpenness: 0.5
+    };
+
+    // UI 映射表
+    const SHAPE_NAMES = {
+      galaxy: { cn: '星云', en: 'SPIRAL GALAXY' },
+      firework: { cn: '烟花', en: 'CELESTIAL FIREWORK' },
+      saturn: { cn: '土星', en: 'RINGED SATURN' },
+      heart: { cn: '爱心', en: 'PULSATING HEART' },
+      custom: { cn: '星绘', en: 'IMAGE STELLATION' }
+    };
+
+    // 辅助 Toast 提示
+    const toastElem = document.getElementById('toast');
+    let toastTimer = null;
+    function showToast(text) {
+      toastElem.innerText = text;
+      toastElem.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastElem.classList.remove('show'), 2200);
+    }
+
+    /* ==========================================================================
+       二、径向渐变贴图生成器
+       ========================================================================== */
+    function createGlowParticleTexture() {
+      const size = 64;
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+
+      const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+      gradient.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)');
+      gradient.addColorStop(0.2, 'rgba(255, 255, 255, 0.8)');
+      gradient.addColorStop(0.5, 'rgba(0, 242, 254, 0.3)');
+      gradient.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, size, size);
+
+      const texture = new THREE.Texture(canvas);
+      texture.needsUpdate = true;
+      return texture;
+    }
+
+    /* ==========================================================================
+       三、三维形态生成数学模型
+       ========================================================================== */
+    function generateGalaxy(target) {
+      const arms = 3;
+      const armSpread = 0.55;
+      const maxR = 48;
+
+      for (let i = 0; i < TOTAL_PARTICLES; i++) {
+        const i3 = i * 3;
+        const r = Math.pow(Math.random(), 1.6) * maxR;
+        const armIndex = i % arms;
+        const angle = (armIndex * (Math.PI * 2 / arms)) + (r * 0.18) + (Math.random() - 0.5) * armSpread;
+
+        const zSpread = (maxR - r) * 0.18 + 1.0;
+        const z = (Math.random() - 0.5) * zSpread * (Math.random() > 0.5 ? 1 : -1);
+
+        target[i3] = Math.cos(angle) * r;
+        target[i3 + 1] = z;
+        target[i3 + 2] = Math.sin(angle) * r;
+      }
+    }
+
+    function generateFirework(target) {
+      const shells = 5;
+      const shellRadii = [12, 22, 32, 42, 52];
+
+      for (let i = 0; i < TOTAL_PARTICLES; i++) {
+        const i3 = i * 3;
+        const sIndex = i % shells;
+        const baseR = shellRadii[sIndex];
+        // 沿径向微厚度与向外溅射速度残影
+        const r = baseR + (Math.random() - 0.5) * 4.2;
+
+        const phi = Math.acos(2 * Math.random() - 1);
+        const theta = Math.random() * Math.PI * 2;
+
+        target[i3] = r * Math.sin(phi) * Math.cos(theta);
+        target[i3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+        target[i3 + 2] = r * Math.cos(phi);
+      }
+    }
+
+    function generateSaturn(target) {
+      // 约 45% 属于内部球体，55% 属于外围扁平光环
+      const bodyRatio = 0.45;
+      const sphereCount = Math.floor(TOTAL_PARTICLES * bodyRatio);
+      const sphereR = 18;
+      const ringMinR = 25;
+      const ringMaxR = 52;
+      const tiltAngle = 0.46; // 光环倾角约 26 度
+
+      const cosT = Math.cos(tiltAngle);
+      const sinT = Math.sin(tiltAngle);
+
+      for (let i = 0; i < TOTAL_PARTICLES; i++) {
+        const i3 = i * 3;
+        let x, y, z;
+
+        if (i < sphereCount) {
+          // 球体内核
+          const r = Math.cbrt(Math.random()) * sphereR;
+          const phi = Math.acos(2 * Math.random() - 1);
+          const theta = Math.random() * Math.PI * 2;
+          x = r * Math.sin(phi) * Math.cos(theta);
+          y = r * Math.sin(phi) * Math.sin(theta) * 0.88; // 极轴微扁
+          z = r * Math.cos(phi);
+        } else {
+          // 倾斜光环 (具有微细缝隙层次)
+          const ringDist = ringMinR + Math.pow(Math.random(), 0.8) * (ringMaxR - ringMinR);
+          const theta = Math.random() * Math.PI * 2;
+          const rx = ringDist * Math.cos(theta);
+          const ry = (Math.random() - 0.5) * 1.0; // 光环很薄
+          const rz = ringDist * Math.sin(theta);
+
+          // 倾斜矩阵旋转
+          x = rx;
+          y = ry * cosT - rz * sinT;
+          z = ry * sinT + rz * cosT;
+        }
+
+        target[i3] = x;
+        target[i3 + 1] = y;
+        target[i3 + 2] = z;
+      }
+    }
+
+    function generateHeart(target) {
+      const scale = 2.4;
+      for (let i = 0; i < TOTAL_PARTICLES; i++) {
+        const i3 = i * 3;
+        const t = Math.PI * 2 * Math.random();
+        
+        // 经典心形曲线
+        let x = 16 * Math.pow(Math.sin(t), 3);
+        let y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+        
+        // 内部填充与厚度
+        const fill = Math.sqrt(Math.random());
+        const zThickness = (1.0 - fill * 0.6) * 12.0;
+        const z = (Math.random() - 0.5) * zThickness;
+
+        target[i3] = x * fill * scale;
+        target[i3 + 1] = (y * fill + 3.0) * scale;
+        target[i3 + 2] = z;
+      }
+    }
+
+    /* ==========================================================================
+       四、图像提线成星引擎 (Sobel 算子)
+       ========================================================================== */
+    function processImageToLines(imageElement) {
+      const TARGET_DIM = 170;
+      const canvas = document.createElement('canvas');
+      canvas.width = TARGET_DIM;
+      canvas.height = TARGET_DIM;
+      const ctx = canvas.getContext('2d');
+
+      // 等比居中缩放绘制
+      ctx.fillStyle = "#000000";
+      ctx.fillRect(0, 0, TARGET_DIM, TARGET_DIM);
+
+      let dx = 0, dy = 0, dw = TARGET_DIM, dh = TARGET_DIM;
+      const ratio = imageElement.width / imageElement.height;
+      if (ratio > 1) {
+        dh = TARGET_DIM / ratio;
+        dy = (TARGET_DIM - dh) / 2;
+      } else {
+        dw = TARGET_DIM * ratio;
+        dx = (TARGET_DIM - dw) / 2;
+      }
+      ctx.drawImage(imageElement, dx, dy, dw, dh);
+
+      const imgData = ctx.getImageData(0, 0, TARGET_DIM, TARGET_DIM);
+      const data = imgData.data;
+
+      // 1. 灰度化
+      const gray = new Float32Array(TARGET_DIM * TARGET_DIM);
+      for (let i = 0; i < data.length; i += 4) {
+        gray[i / 4] = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+      }
+
+      // 2. Sobel 水平与垂直卷积
+      const gradients = new Float32Array(TARGET_DIM * TARGET_DIM);
+      let maxGrad = 0;
+
+      for (let y = 1; y < TARGET_DIM - 1; y++) {
+        for (let x = 1; x < TARGET_DIM - 1; x++) {
+          const idx = y * TARGET_DIM + x;
+
+          const gx = 
+            -1 * gray[idx - TARGET_DIM - 1] + 1 * gray[idx - TARGET_DIM + 1] +
+            -2 * gray[idx - 1]              + 2 * gray[idx + 1] +
+            -1 * gray[idx + TARGET_DIM - 1] + 1 * gray[idx + TARGET_DIM + 1];
+
+          const gy = 
+            -1 * gray[idx - TARGET_DIM - 1] - 2 * gray[idx - TARGET_DIM] - 1 * gray[idx - TARGET_DIM + 1] +
+             1 * gray[idx + TARGET_DIM - 1] + 2 * gray[idx + TARGET_DIM] + 1 * gray[idx + TARGET_DIM + 1];
+
+          const mag = Math.hypot(gx, gy);
+          gradients[idx] = mag;
+          if (mag > maxGrad) maxGrad = mag;
+        }
+      }
+
+      // 3. 提取前 12% 边缘强度的自适应阈值
+      const sampled = [];
+      for (let i = 0; i < gradients.length; i += 4) {
+        if (gradients[i] > 10) sampled.push(gradients[i]);
+      }
+      sampled.sort((a, b) => b - a);
+      const top12Idx = Math.floor(sampled.length * 0.12);
+      const threshold = (sampled.length > 0 && top12Idx < sampled.length) ? sampled[top12Idx] : 30;
+
+      // 4. 收集边缘点集
+      const edgePoints = [];
+      for (let y = 1; y < TARGET_DIM - 1; y++) {
+        for (let x = 1; x < TARGET_DIM - 1; x++) {
+          const idx = y * TARGET_DIM + x;
+          const mag = gradients[idx];
+          if (mag >= threshold) {
+            edgePoints.push({
+              x: (x - TARGET_DIM / 2) / (TARGET_DIM / 2),
+              y: -(y - TARGET_DIM / 2) / (TARGET_DIM / 2),
+              strength: THREE.MathUtils.clamp(mag / (maxGrad || 1), 0.2, 1.0)
+            });
+          }
+        }
+      }
+
+      if (edgePoints.length === 0) {
+        showToast('未能有效提取边缘，请尝试高对比度图片');
+        return;
+      }
+
+      // 5. 采样到 16000 粒子阵列
+      const targetScale = 45; // 映射至与现有星系协调的尺寸
+      for (let i = 0; i < TOTAL_PARTICLES; i++) {
+        const i3 = i * 3;
+        const p = edgePoints[Math.floor(Math.random() * edgePoints.length)];
+
+        // 轻微抖动笔触模拟星轨感，线条强度决定离散度
+        const jitter = (1.2 - p.strength) * 1.5;
+        const jx = (Math.random() - 0.5) * jitter;
+        const jy = (Math.random() - 0.5) * jitter;
+        const jz = (Math.random() - 0.5) * (jitter * 4.0);
+
+        targetPositions[i3] = (p.x + jx * 0.05) * targetScale;
+        targetPositions[i3 + 1] = (p.y + jy * 0.05) * targetScale;
+        targetPositions[i3 + 2] = jz;
+      }
+
+      updateColors();
+      setShapeUI('custom');
+      showToast('图片提线已完成，星云轮廓已重塑');
+    }
+
+    /* ==========================================================================
+       五、颜色与着色渐变计算
+       ========================================================================= */
+    function updateColors() {
+      const pArray = particleGeo.attributes.position.array;
+      const cArray = particleGeo.attributes.color.array;
+      const maxDistance = 46.0;
+
+      for (let i = 0; i < TOTAL_PARTICLES; i++) {
+        const i3 = i * 3;
+        // 计算到中心距离做核心高亮淡化
+        const d = Math.hypot(pArray[i3], pArray[i3 + 1], pArray[i3 + 2]);
+        const factor = THREE.MathUtils.clamp(d / maxDistance, 0.0, 1.0);
+
+        // 核心近白，边缘呈现基础光谱色
+        const r = THREE.MathUtils.lerp(whiteColor.r, baseColor.r, factor);
+        const g = THREE.MathUtils.lerp(whiteColor.g, baseColor.g, factor);
+        const b = THREE.MathUtils.lerp(whiteColor.b, baseColor.b, factor);
+
+        cArray[i3] = r;
+        cArray[i3 + 1] = g;
+        cArray[i3 + 2] = b;
+      }
+      particleGeo.attributes.color.needsUpdate = true;
+    }
+
+    /* ==========================================================================
+       六、Three.js 场景初始化与构建
+       ========================================================================= */
+    function initWebGL() {
+      const container = document.getElementById('webgl-canvas');
+
+      // 检测上下文可用性
+      try {
+        const testCanvas = document.createElement('canvas');
+        if (!Boolean(window.WebGLRenderingContext && (testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl')))) {
+          throw new Error('WebGL not supported');
+        }
+      } catch (e) {
+        document.getElementById('webgl-fallback').style.display = 'flex';
+        return;
+      }
+
+      scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(0x05070c, 0.0055);
+
+      camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 1, 1000);
+      camera.position.set(0, 24, 96);
+      camera.lookAt(0, 0, 0);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setClearColor(scene.fog.color);
+      container.appendChild(renderer.domElement);
+
+      const particleTex = createGlowParticleTexture();
+
+      // 1. 主粒子系统构建
+      particleGeo = new THREE.BufferGeometry();
+      for (let i = 0; i < TOTAL_PARTICLES; i++) {
+        noisePhases[i * 3] = Math.random() * Math.PI * 2;
+        noisePhases[i * 3 + 1] = Math.random() * Math.PI * 2;
+        noisePhases[i * 3 + 2] = Math.random() * Math.PI * 2;
+      }
+
+      generateGalaxy(targetPositions);
+      for (let i = 0; i < TOTAL_PARTICLES * 3; i++) {
+        currentPositions[i] = targetPositions[i] + (Math.random() - 0.5) * 60;
+      }
+
+      particleGeo.setAttribute('position', new THREE.BufferAttribute(currentPositions, 3));
+      particleGeo.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
+
+      const particleMat = new THREE.PointsMaterial({
+        size: PARAMS.glowSize,
+        map: particleTex,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.92,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+
+      particleSystem = new THREE.Points(particleGeo, particleMat);
+      scene.add(particleSystem);
+      updateColors();
+
+      // 2. 远景微弱背景星尘
+      bgDustGeo = new THREE.BufferGeometry();
+      const dustPos = new Float32Array(2500 * 3);
+      for (let i = 0; i < 2500; i++) {
+        dustPos[i * 3] = (Math.random() - 0.5) * 350;
+        dustPos[i * 3 + 1] = (Math.random() - 0.5) * 350;
+        dustPos[i * 3 + 2] = (Math.random() - 0.5) * 350;
+      }
+      bgDustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+      bgDustGeo.setDrawRange(0, PARAMS.bgDustCount);
+
+      const bgDustMat = new THREE.PointsMaterial({
+        size: 1.4,
+        map: particleTex,
+        color: 0x4facfe,
+        transparent: true,
+        opacity: 0.35,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      });
+
+      bgDustSystem = new THREE.Points(bgDustGeo, bgDustMat);
+      scene.add(bgDustSystem);
+
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function setShapeUI(shapeKey) {
+      PARAMS.currentShape = shapeKey;
+      document.querySelectorAll('.shape-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.shape === shapeKey);
+      });
+      const info = SHAPE_NAMES[shapeKey] || { cn: '形态', en: 'CUSTOM' };
+      document.getElementById('display-title-cn').innerText = info.cn;
+      document.getElementById('display-title-en').innerText = info.en;
+    }
+
+    function switchShape(shapeKey) {
+      if (shapeKey === 'galaxy') generateGalaxy(targetPositions);
+      else if (shapeKey === 'firework') generateFirework(targetPositions);
+      else if (shapeKey === 'saturn') generateSaturn(targetPositions);
+      else if (shapeKey === 'heart') generateHeart(targetPositions);
+
+      setShapeUI(shapeKey);
+      showToast(`形态已切换为：${SHAPE_NAMES[shapeKey].cn}`);
+    }
+
+    /* ==========================================================================
+       七、MediaPipe Hands 离线手势感知与姿态解算
+       ========================================================================== */
+    let handsTracker = null;
+    let cameraWorker = null;
+    const videoElem = document.getElementById('webcam-video');
+    const camCanvas = document.getElementById('cam-canvas');
+    const camCtx = camCanvas.getContext('2d');
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+
+    function onHandResults(results) {
+      camCtx.save();
+      camCtx.clearRect(0, 0, camCanvas.width, camCanvas.height);
+      camCtx.drawImage(results.image, 0, 0, camCanvas.width, camCanvas.height);
+
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        GESTURE.isTracking = true;
+        const landmarks = results.multiHandLandmarks[0];
+
+        // 绘制手势关键点与骨骼
+        if (window.drawConnectors && window.drawLandmarks) {
+          drawConnectors(camCtx, landmarks, HAND_CONNECTIONS, { color: '#00f2fe', lineWidth: 1.5 });
+          drawLandmarks(camCtx, landmarks, { color: '#ffffff', lineWidth: 1, radius: 2 });
+        }
+
+        // 核心解算：手腕到中指根 (基准掌长)，拇指尖到小指根 (开合张力)
+        const wrist = landmarks[0];
+        const middleBase = landmarks[9];
+        const thumbTip = landmarks[4];
+        const pinkyBase = landmarks[17];
+
+        const palmLength = Math.hypot(middleBase.x - wrist.x, middleBase.y - wrist.y) || 0.001;
+        const spanDist = Math.hypot(thumbTip.x - pinkyBase.x, thumbTip.y - pinkyBase.y);
+
+        // 归一化开合度 (典型范围约 0.45 ~ 1.55)
+        const ratio = spanDist / palmLength;
+        GESTURE.rawOpenness = ratio;
+
+        // 映射手掌缩放: 捏合约 0.35 倍，张开约 2.4 倍
+        const normFactor = THREE.MathUtils.clamp((ratio - 0.45) / (1.55 - 0.45), 0.0, 1.0);
+        GESTURE.targetScale = THREE.MathUtils.lerp(0.35, 2.4, normFactor);
+
+        // 水平位置驱动旋转加速度 (镜像后: 左倾逆转，右倾正转)
+        const handCenterX = 1.0 - middleBase.x;
+        GESTURE.targetRotVelocity = (handCenterX - 0.5) * 0.055;
+
+        // UI 状态反馈
+        statusDot.className = 'status-dot active';
+        statusText.innerText = '手势接管中 · 空间感知实时在线';
+        document.getElementById('gest-state').innerText = ratio < 0.75 ? '🤏 捏合聚拢' : (ratio > 1.2 ? '🖐 张开扩散' : '平稳巡航');
+      } else {
+        GESTURE.isTracking = false;
+        GESTURE.targetScale = 1.0;
+        GESTURE.targetRotVelocity = 0.0;
+        statusDot.className = 'status-dot';
+        statusText.innerText = PARAMS.cameraActive ? '视觉待命中 · 正在寻觅手部' : '待机 · 自动律动模式';
+        document.getElementById('gest-state').innerText = '未检出特征';
+      }
+
+      camCtx.restore();
+    }
+
+    async function toggleCamera() {
+      const btn = document.getElementById('btn-toggle-cam');
+      const btnText = document.getElementById('btn-cam-text');
+
+      if (!PARAMS.cameraActive) {
+        try {
+          if (!handsTracker) {
+            handsTracker = new Hands({
+              locateFile: (file) => `./vendor/${file}`
+            });
+            handsTracker.setOptions({
+              maxNumHands: 1,
+              modelComplexity: 1,
+              minDetectionConfidence: 0.55,
+              minTrackingConfidence: 0.5
+            });
+            handsTracker.onResults(onHandResults);
+          }
+
+          cameraWorker = new Camera(videoElem, {
+            onFrame: async () => {
+              if (PARAMS.cameraActive) {
+                await handsTracker.send({ image: videoElem });
+              }
+            },
+            width: 320,
+            height: 240
+          });
+
+          await cameraWorker.start();
+          PARAMS.cameraActive = true;
+          btnText.innerText = '关闭摄像头感知';
+          btn.classList.add('btn-primary');
+          showToast('摄像头追踪已启动');
+        } catch (err) {
+          showToast('无法访问摄像头或本地 vendor 缺失');
+          console.error(err);
+        }
+      } else {
+        if (cameraWorker) await cameraWorker.stop();
+        PARAMS.cameraActive = false;
+        GESTURE.isTracking = false;
+        btnText.innerText = '开启摄像头感知';
+        btn.classList.remove('btn-primary');
+        camCtx.clearRect(0, 0, camCanvas.width, camCanvas.height);
+        showToast('已停止摄像头采集');
+      }
+    }
+
+    /* ==========================================================================
+       八、主渲染与动力学缓动循环
+       ========================================================================= */
+    const clock = new THREE.Clock();
+
+    function renderLoop() {
+      requestAnimationFrame(renderLoop);
+
+      const elapsedTime = clock.getElapsedTime();
+      const pArray = particleGeo.attributes.position.array;
+
+      // 1. 手势参数平滑插值 (阻尼滤波)
+      GESTURE.scale = THREE.MathUtils.lerp(GESTURE.scale, GESTURE.targetScale, 0.08);
+      GESTURE.rotVelocity = THREE.MathUtils.lerp(GESTURE.rotVelocity, GESTURE.targetRotVelocity, 0.06);
+
+      // 2. 自动演示微调呼吸与转动
+      let autoPulse = 1.0;
+      if (!GESTURE.isTracking && PARAMS.autoDemo) {
+        autoPulse = 1.0 + Math.sin(elapsedTime * 1.6) * 0.28;
+      }
+      const finalScale = GESTURE.isTracking ? GESTURE.scale : autoPulse;
+
+      // 实时更新控制台监控数值
+      document.getElementById('gest-scale').innerText = finalScale.toFixed(2) + 'x';
+      document.getElementById('gest-rot').innerText = (GESTURE.rotVelocity >= 0 ? '+' : '') + GESTURE.rotVelocity.toFixed(4);
+
+      // 3. 粒子运动动力学计算
+      const activeCount = PARAMS.activeParticles;
+      const easeFactor = 0.065; // 向目标形态聚拢的缓动刚度
+
+      for (let i = 0; i < activeCount; i++) {
+        const i3 = i * 3;
+
+        // 正弦呼吸微扰 (带相位差)
+        const waveX = Math.sin(elapsedTime * 2.2 + noisePhases[i3]) * 0.45;
+        const waveY = Math.cos(elapsedTime * 2.0 + noisePhases[i3 + 1]) * 0.45;
+        const waveZ = Math.sin(elapsedTime * 2.5 + noisePhases[i3 + 2]) * 0.45;
+
+        // 目标位置施加缩放与呼吸
+        const tx = targetPositions[i3] * finalScale + waveX;
+        const ty = targetPositions[i3 + 1] * finalScale + waveY;
+        const tz = targetPositions[i3 + 2] * finalScale + waveZ;
+
+        // 缓动聚拢
+        pArray[i3] += (tx - pArray[i3]) * easeFactor;
+        pArray[i3 + 1] += (ty - pArray[i3 + 1]) * easeFactor;
+        pArray[i3 + 2] += (tz - pArray[i3 + 2]) * easeFactor;
+      }
+
+      particleGeo.attributes.position.needsUpdate = true;
+
+      // 4. 旋转控制
+      const baseRot = 0.0035 * PARAMS.baseSpeed;
+      particleSystem.rotation.y += baseRot + GESTURE.rotVelocity;
+      particleSystem.rotation.x = Math.sin(elapsedTime * 0.3) * 0.12;
+
+      // 背景星尘随速深层微动
+      if (bgDustSystem) {
+        bgDustSystem.rotation.y += 0.0006;
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    /* ==========================================================================
+       九、UI 交互事件监听绑定
+       ========================================================================= */
+    function initUIEvents() {
+      // 形态选择
+      document.querySelectorAll('.shape-btn').forEach(btn => {
+        btn.addEventListener('click', () => switchShape(btn.dataset.shape));
+      });
+
+      // 基础色更换
+      document.querySelectorAll('.color-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          document.querySelectorAll('.color-chip').forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          baseColor.set(chip.dataset.color);
+          updateColors();
+          showToast(`星谱色相已切换`);
+        });
+      });
+
+      // 图片上传与 Sobel 分析
+      const uploader = document.getElementById('img-uploader');
+      uploader.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const img = new Image();
+          img.onload = () => processImageToLines(img);
+          img.src = evt.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+
+      // 粒子活跃密度
+      const slDensity = document.getElementById('sl-density');
+      slDensity.addEventListener('input', (e) => {
+        PARAMS.activeParticles = parseInt(e.target.value);
+        particleGeo.setDrawRange(0, PARAMS.activeParticles);
+        document.getElementById('val-density').innerText = Math.round((PARAMS.activeParticles / TOTAL_PARTICLES) * 100) + '%';
+      });
+
+      // 辉光大小
+      const slGlow = document.getElementById('sl-glow');
+      slGlow.addEventListener('input', (e) => {
+        PARAMS.glowSize = parseFloat(e.target.value);
+        particleSystem.material.size = PARAMS.glowSize;
+        document.getElementById('val-glow').innerText = PARAMS.glowSize.toFixed(1);
+      });
+
+      // 基础自转速度
+      const slSpeed = document.getElementById('sl-speed');
+      slSpeed.addEventListener('input', (e) => {
+        PARAMS.baseSpeed = parseFloat(e.target.value);
+        document.getElementById('val-speed').innerText = PARAMS.baseSpeed.toFixed(1) + 'x';
+      });
+
+      // 背景星尘
+      const slDust = document.getElementById('sl-dust');
+      slDust.addEventListener('input', (e) => {
+        PARAMS.bgDustCount = parseInt(e.target.value);
+        bgDustGeo.setDrawRange(0, PARAMS.bgDustCount);
+        document.getElementById('val-dust').innerText = PARAMS.bgDustCount;
+      });
+
+      // 摄像头开关
+      document.getElementById('btn-toggle-cam').addEventListener('click', toggleCamera);
+
+      // 自动演示模式切换
+      const btnDemo = document.getElementById('btn-demo-mode');
+      btnDemo.addEventListener('click', () => {
+        PARAMS.autoDemo = !PARAMS.autoDemo;
+        btnDemo.innerText = `自动演示: ${PARAMS.autoDemo ? '开' : '关'}`;
+        showToast(PARAMS.autoDemo ? '已恢复自动脉冲律动' : '自动演示已暂停');
+      });
+
+      // 重置视角与姿态
+      document.getElementById('btn-reset').addEventListener('click', () => {
+        camera.position.set(0, 24, 96);
+        camera.lookAt(0, 0, 0);
+        particleSystem.rotation.set(0, 0, 0);
+        GESTURE.scale = 1.0;
+        GESTURE.targetScale = 1.0;
+        GESTURE.rotVelocity = 0.0;
+        GESTURE.targetRotVelocity = 0.0;
+        showToast('视角与力场已复位');
+      });
+    }
+
+    /* ==========================================================================
+       十、页面就绪入口
+       ========================================================================= */
+    window.addEventListener('DOMContentLoaded', () => {
+      initWebGL();
+      initUIEvents();
+      renderLoop();
+    });
+  </script>
+</body>
+</html>
